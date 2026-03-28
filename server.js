@@ -44,13 +44,15 @@ const upload = multer({
   },
 });
 
-// LowDB setup
-const adapter = new JSONFileSync('db.json');
-const db = new LowSync(adapter);
+// LowDB setup — absolute path for Render compatibility
+const dbPath = path.join(__dirname, 'db.json');
+const adapter = new JSONFileSync(dbPath);
+const db = new LowSync(adapter, { trees: [], watering_events: [] });
 
 db.read();
 if (!db.data) {
   db.data = { trees: [], watering_events: [] };
+  db.write();
 }
 
 // Generate event ID
@@ -60,119 +62,160 @@ function generateEventId() {
 
 // List all trees
 app.get('/api/trees', (req, res) => {
-  db.read();
-  res.json(db.data.trees);
+  try {
+    db.read();
+    res.json(db.data.trees || []);
+  } catch (err) {
+    console.error('GET /api/trees error:', err);
+    res.status(500).json({ error: 'Failed to load trees' });
+  }
 });
 
 // Register tree
 app.post('/api/trees', (req, res) => {
-  const { species, latitude, longitude } = req.body;
+  try {
+    const { species, latitude, longitude } = req.body;
 
-  if (latitude == null || longitude == null) {
-    return res.status(400).json({ error: 'Latitude and longitude required' });
+    if (latitude == null || longitude == null) {
+      return res.status(400).json({ error: 'Latitude and longitude required' });
+    }
+
+    const id = uuidv4();
+
+    const newTree = {
+      id,
+      species: species || null,
+      latitude,
+      longitude,
+      created_at: new Date().toISOString()
+    };
+
+    db.read();
+    db.data.trees.push(newTree);
+    db.write();
+
+    res.json({ treeId: id });
+  } catch (err) {
+    console.error('POST /api/trees error:', err);
+    res.status(500).json({ error: 'Failed to register tree' });
   }
-
-  const id = uuidv4();
-
-  const newTree = {
-    id,
-    species: species || null,
-    latitude,
-    longitude,
-    created_at: new Date().toISOString()
-  };
-
-  db.data.trees.push(newTree);
-  db.write();
-
-  res.json({ treeId: id });
 });
 
 // Get tree details
 app.get('/api/trees/:id', (req, res) => {
-  const tree = db.data.trees.find(t => t.id === req.params.id);
-  if (!tree) return res.status(404).json({ error: 'Tree not found' });
-
-  res.json(tree);
+  try {
+    db.read();
+    const tree = db.data.trees.find(t => t.id === req.params.id);
+    if (!tree) return res.status(404).json({ error: 'Tree not found' });
+    res.json(tree);
+  } catch (err) {
+    console.error('GET /api/trees/:id error:', err);
+    res.status(500).json({ error: 'Failed to get tree details' });
+  }
 });
 
 // Upload soil image
 app.post('/api/trees/:id/soil', upload.single('soilImage'), (req, res) => {
-  const treeId = req.params.id;
+  try {
+    const treeId = req.params.id;
+    db.read();
 
-  const tree = db.data.trees.find(t => t.id === treeId);
-  if (!tree) return res.status(404).json({ error: 'Tree not found' });
+    const tree = db.data.trees.find(t => t.id === treeId);
+    if (!tree) return res.status(404).json({ error: 'Tree not found' });
 
-  // ✅ Safety check
-  if (!req.file) {
-    return res.status(400).json({ error: 'Image required' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'Image required' });
+    }
+
+    const isWet = Math.random() > 0.5;
+    const status = isWet ? 'wet' : 'dry';
+    const confidence = (Math.random() * 30 + 70).toFixed(2);
+
+    const eventId = generateEventId();
+
+    const newEvent = {
+      id: eventId,
+      tree_id: treeId,
+      timestamp: new Date().toISOString(),
+      status,
+      confidence: Number(confidence),
+      image_path: req.file.filename
+    };
+
+    db.data.watering_events.push(newEvent);
+    db.write();
+
+    res.json({ status, confidence, imageUrl: `/uploads/${req.file.filename}` });
+  } catch (err) {
+    console.error('POST /api/trees/:id/soil error:', err);
+    res.status(500).json({ error: 'Failed to analyze soil' });
   }
-
-  // Mock AI detection
-  const isWet = Math.random() > 0.5;
-  const status = isWet ? 'wet' : 'dry';
-  const confidence = (Math.random() * 30 + 70).toFixed(2);
-
-  const eventId = generateEventId();
-
-  const newEvent = {
-    id: eventId,
-    tree_id: treeId,
-    timestamp: new Date().toISOString(),
-    status,
-    confidence: Number(confidence),
-    image_path: req.file.filename
-  };
-
-  db.data.watering_events.push(newEvent);
-  db.write();
-
-  res.json({
-    status,
-    confidence,
-    imageUrl: `/uploads/${req.file.filename}`
-  });
 });
 
 // Get watering history
 app.get('/api/trees/:id/history', (req, res) => {
-  const history = db.data.watering_events
-    .filter(e => e.tree_id === req.params.id)
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-  res.json(history);
+  try {
+    db.read();
+    const history = (db.data.watering_events || [])
+      .filter(e => e.tree_id === req.params.id)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    res.json(history);
+  } catch (err) {
+    console.error('GET /api/trees/:id/history error:', err);
+    res.status(500).json({ error: 'Failed to load history' });
+  }
 });
 
 // Get latest watering event for a tree
 app.get('/api/trees/:id/latest', (req, res) => {
-  const events = db.data.watering_events
-    .filter(e => e.tree_id === req.params.id)
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  if (events.length === 0) return res.json(null);
-  res.json(events[0]);
+  try {
+    db.read();
+    const events = (db.data.watering_events || [])
+      .filter(e => e.tree_id === req.params.id)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    if (events.length === 0) return res.json(null);
+    res.json(events[0]);
+  } catch (err) {
+    console.error('GET /api/trees/:id/latest error:', err);
+    res.status(500).json({ error: 'Failed to load latest event' });
+  }
 });
 
 // Mark water given (optional confirmation)
 app.post('/api/trees/:id/watered', (req, res) => {
-  const treeId = req.params.id;
-  const tree = db.data.trees.find(t => t.id === treeId);
-  if (!tree) return res.status(404).json({ error: 'Tree not found' });
-  const eventId = generateEventId();
-  const newEvent = {
-    id: eventId,
-    tree_id: treeId,
-    timestamp: new Date().toISOString(),
-    status: 'watered',
-    confidence: 100,
-    image_path: null
-  };
-  db.data.watering_events.push(newEvent);
-  db.write();
-  res.json({ success: true, eventId });
+  try {
+    db.read();
+    const treeId = req.params.id;
+    const tree = db.data.trees.find(t => t.id === treeId);
+    if (!tree) return res.status(404).json({ error: 'Tree not found' });
+    const eventId = generateEventId();
+    const newEvent = {
+      id: eventId,
+      tree_id: treeId,
+      timestamp: new Date().toISOString(),
+      status: 'watered',
+      confidence: 100,
+      image_path: null
+    };
+    db.data.watering_events.push(newEvent);
+    db.write();
+    res.json({ success: true, eventId });
+  } catch (err) {
+    console.error('POST /api/trees/:id/watered error:', err);
+    res.status(500).json({ error: 'Failed to record watering' });
+  }
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('❌ Error:', err.message);
+  console.error(err.stack);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📱 Phone access: http://192.168.1.34:${PORT}`);
+  console.log(`📂 Database path: ${dbPath}`);
+  console.log(`📁 Upload dir: ${uploadDir}`);
 });
