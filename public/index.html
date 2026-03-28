@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TreeGuard — Smart Tree Water Monitoring</title>
+    <meta name="description" content="Register, monitor and manage tree watering with AI-powered soil moisture detection and QR code tracking." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <!-- QRCode generator -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <!-- Html5-QRCode scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+    <!-- Ambient background particles -->
+    <div class="bg-particles" id="bg-particles"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-tree"></i>
+            <span>TreeGuard</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#" class="nav-link active" data-view="home"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="#" class="nav-link" data-view="register"><i class="fas fa-plus-circle"></i> Register</a></li>
+            <li><a href="#" class="nav-link" data-view="scan"><i class="fas fa-qrcode"></i> Scan QR</a></li>
+            <li><a href="#" class="nav-link" data-view="trees"><i class="fas fa-list"></i> All Trees</a></li>
+        </ul>
+        <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+            <i class="fas fa-bars"></i>
+        </button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+        <!-- ============ HOME VIEW ============ -->
+        <section id="view-home" class="view active">
+            <div class="hero">
+                <div class="hero-content">
+                    <h1 class="hero-title">
+                        <span class="gradient-text">Smart Tree</span><br/>
+                        Water Monitoring
+                    </h1>
+                    <p class="hero-subtitle">Register trees, generate QR codes, scan to track, and verify soil moisture — all in one premium platform.</p>
+                    <div class="hero-actions">
+                        <button class="btn btn-glow" data-navigate="register">
+                            <i class="fas fa-seedling"></i> Register a Tree
+                        </button>
+                        <button class="btn btn-outline" data-navigate="scan">
+                            <i class="fas fa-camera"></i> Scan QR Code
+                        </button>
+                    </div>
+                </div>
+                <div class="hero-visual">
+                    <div class="hero-card glass-card">
+                        <div class="stat-grid">
+                            <div class="stat-item">
+                                <i class="fas fa-tree stat-icon" style="color:#4ade80;"></i>
+                                <span class="stat-value" id="stat-trees">0</span>
+                                <span class="stat-label">Trees Registered</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-tint stat-icon" style="color:#60a5fa;"></i>
+                                <span class="stat-value" id="stat-events">0</span>
+                                <span class="stat-label">Watering Events</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-check-circle stat-icon" style="color:#a78bfa;"></i>
+                                <span class="stat-value" id="stat-healthy">0</span>
+                                <span class="stat-label">Well-Watered</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-exclamation-triangle stat-icon" style="color:#fbbf24;"></i>
+                                <span class="stat-value" id="stat-dry">0</span>
+                                <span class="stat-label">Need Water</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features Preview -->
+            <div class="features-grid">
+                <div class="feature-card glass-card" data-navigate="register">
+                    <div class="feature-icon"><i class="fas fa-plus-circle"></i></div>
+                    <h3>Register Trees</h3>
+                    <p>Add trees with species, location, and get a unique QR code for tracking.</p>
+                </div>
+                <div class="feature-card glass-card" data-navigate="scan">
+                    <div class="feature-icon"><i class="fas fa-qrcode"></i></div>
+                    <h3>QR Scanning</h3>
+                    <p>Scan any tree's QR code to instantly view its details and watering status.</p>
+                </div>
+                <div class="feature-card glass-card" data-navigate="register">
+                    <div class="feature-icon"><i class="fas fa-microscope"></i></div>
+                    <h3>Soil Analysis</h3>
+                    <p>Upload soil photos for AI-powered moisture detection and watering verification.</p>
+                </div>
+                <div class="feature-card glass-card" data-navigate="trees">
+                    <div class="feature-icon"><i class="fas fa-chart-bar"></i></div>
+                    <h3>Track History</h3>
+                    <p>Full watering timeline and health analytics for every registered tree.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ REGISTER VIEW ============ -->
+        <section id="view-register" class="view">
+            <div class="view-header">
+                <h2><i class="fas fa-seedling"></i> Register New Tree</h2>
+                <p>Fill in the details below to register a new tree and generate its unique QR code.</p>
+            </div>
+
+            <div class="register-layout">
+                <div class="glass-card register-form-card">
+                    <form id="register-form">
+                        <div class="form-group">
+                            <label for="species"><i class="fas fa-leaf"></i> Species</label>
+                            <input type="text" id="species" name="species" placeholder="e.g., Neem, Banyan, Oak..." />
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="lat"><i class="fas fa-map-marker-alt"></i> Latitude</label>
+                                <input type="number" step="any" id="lat" name="lat" placeholder="e.g., 28.6139" required />
+                            </div>
+                            <div class="form-group">
+                                <label for="lng"><i class="fas fa-map-marker-alt"></i> Longitude</label>
+                                <input type="number" step="any" id="lng" name="lng" placeholder="e.g., 77.2090" required />
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary" id="use-gps-btn">
+                            <i class="fas fa-crosshairs"></i> Use My Location
+                        </button>
+                        <button type="submit" class="btn btn-glow btn-full" id="register-submit-btn">
+                            <i class="fas fa-check"></i> Register Tree
+                        </button>
+                    </form>
+                </div>
+
+                <!-- QR Result (shown after successful registration) -->
+                <div class="glass-card qr-result-card hidden" id="qr-result-card">
+                    <div class="success-badge">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Tree Registered!</span>
+                    </div>
+                    <div id="qr-display" class="qr-display"></div>
+                    <p class="qr-tree-id" id="qr-tree-id"></p>
+                    <div class="qr-actions">
+                        <button class="btn btn-outline btn-sm" id="download-qr-btn">
+                            <i class="fas fa-download"></i> Download QR
+                        </button>
+                        <button class="btn btn-outline btn-sm" id="print-qr-btn">
+                            <i class="fas fa-print"></i> Print QR
+                        </button>
+                        <button class="btn btn-outline btn-sm" id="view-dashboard-btn">
+                            <i class="fas fa-external-link-alt"></i> View Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ SCAN VIEW ============ -->
+        <section id="view-scan" class="view">
+            <div class="view-header">
+                <h2><i class="fas fa-qrcode"></i> Scan Tree QR Code</h2>
+                <p>Point your camera at a tree's QR code to retrieve its details and watering status.</p>
+            </div>
+            <div class="scan-layout">
+                <div class="glass-card scan-card">
+                    <div id="qr-reader" class="qr-reader"></div>
+                    <div class="scan-instructions" id="scan-instructions">
+                        <i class="fas fa-camera fa-2x"></i>
+                        <p>Camera will activate automatically. Position the QR code within the frame.</p>
+                    </div>
+                    <button class="btn btn-glow btn-full" id="start-scan-btn">
+                        <i class="fas fa-play"></i> Start Scanner
+                    </button>
+                    <button class="btn btn-outline btn-full hidden" id="stop-scan-btn">
+                        <i class="fas fa-stop"></i> Stop Scanner
+                    </button>
+                </div>
+
+                <!-- Manual ID entry -->
+                <div class="glass-card">
+                    <h3 class="card-title"><i class="fas fa-keyboard"></i> Or Enter Tree ID</h3>
+                    <div class="manual-entry">
+                        <input type="text" id="manual-tree-id" placeholder="Paste tree ID here..." />
+                        <button class="btn btn-glow" id="manual-lookup-btn">
+                            <i class="fas fa-search"></i> Lookup
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ALL TREES VIEW ============ -->
+        <section id="view-trees" class="view">
+            <div class="view-header">
+                <h2><i class="fas fa-list"></i> All Registered Trees</h2>
+                <p>Browse and manage all trees in the monitoring system.</p>
+            </div>
+            <div class="trees-controls">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="tree-search" placeholder="Search by species or ID..." />
+                </div>
+            </div>
+            <div class="trees-grid" id="trees-grid">
+                <div class="empty-state" id="trees-empty">
+                    <i class="fas fa-seedling fa-3x"></i>
+                    <p>No trees registered yet.</p>
+                    <button class="btn btn-outline" data-navigate="register">Register your first tree</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ DASHBOARD VIEW ============ -->
+        <section id="view-dashboard" class="view">
+            <div class="view-header">
+                <button class="btn btn-ghost" id="dashboard-back-btn">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+                <h2><i class="fas fa-tachometer-alt"></i> Tree Dashboard</h2>
+            </div>
+
+            <div class="dashboard-layout">
+                <!-- Tree Info Card -->
+                <div class="glass-card dashboard-info-card">
+                    <div class="tree-info-header">
+                        <div class="tree-icon-large">
+                            <i class="fas fa-tree"></i>
+                        </div>
+                        <div class="tree-meta">
+                            <h3 id="dash-species">—</h3>
+                            <p class="tree-id-badge" id="dash-tree-id">—</p>
+                            <p id="dash-location" class="tree-location"><i class="fas fa-map-marker-alt"></i> —</p>
+                            <p id="dash-registered" class="tree-date"><i class="fas fa-calendar"></i> —</p>
+                        </div>
+                    </div>
+                    <!-- Mini QR -->
+                    <div class="mini-qr-wrap">
+                        <div id="dash-qr" class="dash-qr"></div>
+                    </div>
+                </div>
+
+                <!-- ★ LAST WATERED — Prominent Display ★ -->
+                <div class="glass-card last-watered-card" id="last-watered-card">
+                    <div class="last-watered-display">
+                        <div class="last-watered-icon" id="last-watered-icon">
+                            <i class="fas fa-tint"></i>
+                        </div>
+                        <div class="last-watered-info">
+                            <span class="last-watered-label">Last Watered</span>
+                            <span class="last-watered-time" id="last-watered-time">—</span>
+                            <span class="last-watered-date" id="last-watered-date"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ★ SOIL PROOF — Primary Action ★ -->
+                <div class="glass-card dashboard-upload-card">
+                    <h3 class="card-title"><i class="fas fa-camera"></i> Pani Diya? Zameen Ka Photo Lo</h3>
+                    <p class="upload-instructions">Tree ko pani dene ke baad, neeche ki bheegi zameen ka photo upload karo. Agar zameen bheegi hogi tabhi watering count hogi.</p>
+                    <form id="soil-upload-form">
+                        <div class="upload-zone" id="upload-zone">
+                            <i class="fas fa-cloud-upload-alt fa-2x"></i>
+                            <p>📷 Zameen ka photo lo ya drag & drop karo</p>
+                            <input type="file" id="soil-image-input" accept="image/*" capture="environment" />
+                        </div>
+                        <div class="img-preview-wrap hidden" id="img-preview-wrap">
+                            <img id="soil-preview" class="soil-preview" alt="Soil preview" />
+                            <button type="button" class="btn btn-ghost btn-sm" id="remove-preview-btn">
+                                <i class="fas fa-times"></i> Hatao
+                            </button>
+                        </div>
+                        <button type="submit" class="btn btn-glow btn-full" id="analyze-btn" disabled>
+                            <i class="fas fa-flask"></i> Check Karo — Kya Zameen Bheegi Hai?
+                        </button>
+                    </form>
+                    <div class="analysis-result hidden" id="analysis-result">
+                        <div class="result-badge" id="result-badge">
+                            <i class="fas fa-tint"></i>
+                            <span id="result-status">—</span>
+                        </div>
+                        <p class="result-message" id="result-message"></p>
+                        <p class="result-confidence">Confidence: <strong id="result-confidence">—</strong>%</p>
+                    </div>
+                </div>
+
+                <!-- Watering History Card -->
+                <div class="glass-card dashboard-history-card">
+                    <h3 class="card-title"><i class="fas fa-history"></i> Watering History</h3>
+                    <div class="history-timeline" id="history-timeline">
+                        <p class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Loading history...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast notification container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Print QR Overlay -->
+    <div class="print-overlay hidden" id="print-overlay">
+        <div class="print-page">
+            <div class="print-header">
+                <h2>🌳 TreeGuard</h2>
+                <p>Smart Tree Water Monitoring</p>
+            </div>
+            <div class="print-qr" id="print-qr-code"></div>
+            <div class="print-info">
+                <p class="print-species" id="print-species"></p>
+                <p class="print-id" id="print-id"></p>
+            </div>
+            <p class="print-instruction">📱 Scan this QR code to check watering status</p>
+            <button class="btn btn-ghost print-close-btn" id="print-close-btn" onclick="document.getElementById('print-overlay').classList.add('hidden')">
+                <i class="fas fa-times"></i> Close
+            </button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
