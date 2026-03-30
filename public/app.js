@@ -345,8 +345,9 @@
       treeId = url.searchParams.get('tree') || url.searchParams.get('id') || text;
     } catch (_) {}
 
-    showToast('QR code scan ho gaya!', 'success');
-    openDashboard(treeId);
+    showToast('QR code scan ho gaya! 🎯 Tree: ' + treeId.substring(0, 8) + '...', 'success');
+    // ✅ Pass 'scan' as source — this enables watering for THIS tree
+    openDashboard(treeId, 'scan');
   }
 
   // Manual lookup
@@ -355,7 +356,8 @@
     manualBtn.addEventListener('click', () => {
       const id = $('#manual-tree-id').value.trim();
       if (!id) { showToast('Tree ID daalo', 'warning'); return; }
-      openDashboard(id);
+      // ✅ Manual ID entry counts as a scan (user knows the ID)
+      openDashboard(id, 'scan');
     });
   }
 
@@ -427,11 +429,17 @@
 
   // ---- Dashboard ----
   let currentDashTreeId = null;
+  let scannedTreeId = null; // ✅ Track which tree was SCANNED (not just browsed)
 
-  window.__openDashboard = function (treeId) { openDashboard(treeId); };
+  window.__openDashboard = function (treeId) { openDashboard(treeId, 'browse'); };
 
-  function openDashboard(treeId) {
+  function openDashboard(treeId, source = 'browse') {
     currentDashTreeId = treeId;
+    // ✅ Only set scannedTreeId when tree was actually scanned via QR
+    if (source === 'scan') {
+      scannedTreeId = treeId;
+      console.log(`✅ Scanned tree set: ${treeId}`);
+    }
     history.pushState({ view: 'dashboard', tree: treeId }, '', `?view=dashboard&tree=${treeId}`);
     navigateTo('dashboard', false);
     loadDashboardData(treeId);
@@ -577,6 +585,21 @@
       e.preventDefault();
       if (!currentDashTreeId || !fileInput.files.length) return;
 
+      // ✅ STRICT CHECK: Only allow watering if this tree was scanned via QR
+      if (!scannedTreeId || scannedTreeId !== currentDashTreeId) {
+        showToast('⚠️ Pehle is tree ka QR code scan karo! Bina scan ke pani record nahi hoga.', 'warning');
+        const resultDiv = $('#analysis-result');
+        const badge = $('#result-badge');
+        const msgEl = $('#result-message');
+        badge.className = 'result-badge dry';
+        badge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>QR SCAN REQUIRED ⚠️</span>';
+        msgEl.textContent = '🔒 Is tree ka QR code scan karo "Scan QR" page se, phir photo upload karo. Direct browse se watering nahi hogi.';
+        msgEl.className = 'result-message warning';
+        $('#result-confidence').textContent = '—';
+        resultDiv.classList.remove('hidden');
+        return;
+      }
+
       analyzeBtnEl.disabled = true;
       analyzeBtnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Check ho raha hai...';
 
@@ -598,18 +621,20 @@
         $('#result-confidence').textContent = result.confidence;
 
         if (result.status === 'wet') {
-          // ✅ Zameen bheegi hai → Watering auto-record
-          msgEl.textContent = '✅ Pani confirm ho gaya! Watering record ho gayi.';
+          // ✅ Zameen bheegi hai → Watering auto-record for THIS SCANNED TREE ONLY
+          msgEl.textContent = `✅ Pani confirm! Tree ${currentDashTreeId.substring(0, 8)}... ke liye watering record ho gayi.`;
           msgEl.className = 'result-message success';
           try {
             await api(`/api/trees/${currentDashTreeId}/watered`, { method: 'POST' });
           } catch (_) {}
-          showToast('Pani confirm! Watering record ho gayi 💧', 'success');
+          showToast(`💧 Pani confirm! Tree ${currentDashTreeId.substring(0, 8)}... mein record hua`, 'success');
+          // ✅ Reset scannedTreeId after successful watering — one scan = one watering
+          scannedTreeId = null;
         } else {
           // ❌ Zameen sukhi hai → Watering NOT recorded
-          msgEl.textContent = '⚠️ Zameen sukhi hai. Pehle pani do, phir dobara photo lo.';
+          msgEl.textContent = '⚠️ Zameen sukhi hai! Pehle tree ko pani do, phir bheegi zameen ki photo lo.';
           msgEl.className = 'result-message warning';
-          showToast('Zameen sukhi hai — pani do phir try karo', 'warning');
+          showToast('❌ Zameen sukhi hai — pani do, zameen bheegne do, phir try karo', 'warning');
         }
 
         resultDiv.classList.remove('hidden');
