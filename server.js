@@ -12,18 +12,14 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
-
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
 
 // ============================================================
 // ✅ SIMPLE JSON DATABASE (No ESM issues like lowdb v5)
 // ============================================================
-const dbPath = path.join(__dirname, 'db.json');
+// On Render (production), use /tmp for writable storage; locally use project dir
+const dbPath = process.env.NODE_ENV === 'production'
+  ? path.join('/tmp', 'db.json')
+  : path.join(__dirname, 'db.json');
 
 function readDB() {
   try {
@@ -56,6 +52,16 @@ const initialData = readDB();
 console.log(`📂 Database loaded: ${initialData.trees.length} trees, ${initialData.watering_events.length} events`);
 
 // Multer setup — use a temp name first, rename after with tree ID
+// On Render production, uploads also go to /tmp
+const uploadDir = process.env.NODE_ENV === 'production'
+  ? path.join('/tmp', 'uploads')
+  : path.join(__dirname, 'uploads');
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadDir));
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -102,8 +108,10 @@ async function analyzeSoilMoisture(imagePath) {
     let sharp;
     try {
       sharp = require('sharp');
+      // Quick test to ensure sharp actually works (native binaries OK)
+      await sharp(imagePath).metadata();
     } catch (e) {
-      console.log('⚠️ Sharp not installed, using enhanced byte analysis');
+      console.log('⚠️ Sharp not available, using byte analysis:', e.message);
       return analyzeSoilMoistureBasic(imagePath);
     }
 
