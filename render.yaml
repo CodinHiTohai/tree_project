@@ -3,7 +3,7 @@ services:
     name: treeguard
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --omit=optional
     startCommand: node server.js
     envVars:
       - key: NODE_ENV

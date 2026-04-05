@@ -5,6 +5,17 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
+// Global error handlers to prevent silent crashes
+process.on('uncaughtException', (err) => {
+  console.error('💥 UNCAUGHT EXCEPTION:', err.message);
+  console.error(err.stack);
+  // Don't exit — keep server running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
+});
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -26,11 +37,22 @@ const dbPath = process.env.NODE_ENV === 'production'
   ? path.join('/tmp', 'db.json')
   : path.join(__dirname, 'db.json');
 
+// In-memory fallback if file system is not writable
+let memoryDB = null;
+
 function readDB() {
+  // If memoryDB is set, use it (file write failed previously)
+  if (memoryDB !== null) return memoryDB;
   try {
     if (!fs.existsSync(dbPath)) {
       const defaultData = { trees: [], watering_events: [] };
-      fs.writeFileSync(dbPath, JSON.stringify(defaultData, null, 2));
+      try {
+        fs.writeFileSync(dbPath, JSON.stringify(defaultData, null, 2));
+      } catch (writeErr) {
+        console.warn('⚠️ Cannot write to', dbPath, '- switching to memory mode');
+        memoryDB = defaultData;
+        return defaultData;
+      }
       return defaultData;
     }
     const raw = fs.readFileSync(dbPath, 'utf-8');
@@ -40,21 +62,34 @@ function readDB() {
     return data;
   } catch (err) {
     console.error('❌ DB read error:', err);
-    return { trees: [], watering_events: [] };
+    if (!memoryDB) memoryDB = { trees: [], watering_events: [] };
+    return memoryDB;
   }
 }
 
 function writeDB(data) {
+  if (memoryDB !== null) {
+    // Memory mode - just update the in-memory object
+    memoryDB = data;
+    return;
+  }
   try {
     fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
   } catch (err) {
-    console.error('❌ DB write error:', err);
+    console.error('❌ DB write error:', err.message, '- switching to memory mode');
+    memoryDB = data;
   }
 }
 
 // Initialize DB
-const initialData = readDB();
-console.log(`📂 Database loaded: ${initialData.trees.length} trees, ${initialData.watering_events.length} events`);
+try {
+  const initialData = readDB();
+  console.log(`📂 Database loaded: ${initialData.trees.length} trees, ${initialData.watering_events.length} events`);
+  console.log(`📂 DB path: ${dbPath}, Memory mode: ${memoryDB !== null}`);
+} catch (startupErr) {
+  console.error('❌ DB startup error:', startupErr.message);
+  memoryDB = { trees: [], watering_events: [] };
+}
 
 // Multer setup — use a temp name first, rename after with tree ID
 // On Render production, uploads also go to /tmp
